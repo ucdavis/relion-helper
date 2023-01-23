@@ -8,6 +8,8 @@ import sys
 
 from rich import print as pprint
 
+from .utils import working_dir
+
 #backup_suffix = '.{0}.bak'.format(datetime.datetime.now().strftime("%Y-%m-%d-%H:%M"))
 
 help = '''
@@ -37,7 +39,7 @@ def build_args(parser):
 def run(args):
     opt_mapping = build_opt_mapping()
     
-    with contextlib.chdir(args.project_dir):
+    with working_dir(args.project_dir):
         cache_files = list(glob.glob('.gui_*job.star'))
         n_changes = 0
 

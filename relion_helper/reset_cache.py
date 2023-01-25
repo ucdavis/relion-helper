@@ -4,6 +4,7 @@ import re
 import os
 import datetime
 import glob
+import shlex
 import sys
 
 from rich import print as pprint
@@ -18,22 +19,36 @@ the appropriate environment variables. Use when a different Relion module
 was previously used for the given project.
 '''
 
-def build_opt_mapping():
-    opt_mapping = {'fn_ctffind_exe':    os.getenv('RELION_CTFFIND_EXECUTABLE'),
-                   'fn_gctf_exe':       os.getenv('RELION_GCTF_EXECUTABLE'),
-                   'fn_motioncor2_exe': os.getenv('RELION_MOTIONCOR2_EXECUTABLE'),
-                   'qsubscript':        os.getenv('RELION_QSUB_TEMPLATE')}
+def get_env(env_var, allow_undef=False):
+    value = os.getenv(env_var)
 
-    for value in opt_mapping.values():
-        if value is None:
-            pprint(f'[bold red]${value}[/bold red] is not defined; is a relion module loaded?', file=sys.stderr)
-            sys.exit(1)
+    if not allow_undef and value is None:
+        pprint(f'[bold red]${env_var}[/bold red] is not defined; is a relion module loaded?', file=sys.stderr)
+        sys.exit(1)
+
+    return value
     
+
+def build_opt_mapping():
+    opt_mapping = {'fn_ctffind_exe':    get_env('RELION_CTFFIND_EXECUTABLE'),
+                   'fn_gctf_exe':       get_env('RELION_GCTF_EXECUTABLE'),
+                   'fn_motioncor2_exe': get_env('RELION_MOTIONCOR2_EXECUTABLE'),
+                   'qsubscript':        get_env('RELION_QSUB_TEMPLATE')}
+
+    for extra in range(1,10):
+        opt_mapping[f'qsub_extra{extra}'] = get_env(f'RELION_QSUB_EXTRA{extra}_DEFAULT',
+                                                    allow_undef=True)
+
     return opt_mapping
 
 
 def build_args(parser):
     pass
+
+
+def print_diff_header():
+    pprint(f'> {fileinput.filename()}:[magenta]{fileinput.filelineno()}[/magenta]:',
+           file=sys.stderr)
 
 
 def run(args):
@@ -45,18 +60,29 @@ def run(args):
 
         with fileinput.input(files=cache_files, inplace=True, backup='.bak') as fp:
             for line in fp:
-                line = line.rstrip('\n')
-                tokens = re.findall(r'\s?(\s*\S+)', line)
-                if tokens and tokens[0] in opt_mapping:
-                    new_value = opt_mapping[tokens[0]]
-                    if tokens[1].strip() != new_value:
-                        if not args.quiet:
-                            pprint(f'> {fileinput.filename()}:[magenta]{fileinput.filelineno()}[/magenta]\n'\
-                                  f'[yellow]{tokens[1]}[/yellow] => [green]{new_value}[/green]', file=sys.stderr)
-                        tokens[1] = opt_mapping[tokens[0]]
-                        line = ' '.join(tokens)
+                tokens = shlex.split(line)
+                cache_var_name = None if not tokens else tokens[0].strip()
+                if tokens and cache_var_name in opt_mapping:
+                    new_value = opt_mapping[cache_var_name]
+                    old_value = tokens[1].strip()
+
+                    if new_value is None:
+                        print_diff_header()
+                        pprint(f'  {cache_var_name}: [red]undefined, deleting.[/red]',
+                               file=sys.stderr)
                         n_changes += 1
-                print(line)
+                        continue
+                    else:
+                        new_value = new_value.strip()
+                        if old_value != new_value:
+                            if not args.quiet:
+                                print_diff_header()
+                                pprint(f'  {cache_var_name}: [yellow]{old_value}[/yellow] => [green]{new_value}[/green]',
+                                       file=sys.stderr)
+                            tokens[1] = f'"{new_value}"'
+                            line = ' '.join(tokens)
+                            n_changes += 1
+                print(line.rstrip())
 
         if n_changes == 0:
             print('No changes made, project configuration matches current Relion module.',

@@ -33,6 +33,8 @@ def build_opt_mapping():
     opt_mapping = {'fn_ctffind_exe':    get_env('RELION_CTFFIND_EXECUTABLE'),
                    'fn_gctf_exe':       get_env('RELION_GCTF_EXECUTABLE'),
                    'fn_motioncor2_exe': get_env('RELION_MOTIONCOR2_EXECUTABLE'),
+                   'fn_topaz_exec':     get_env('RELION_TOPAZ_EXECUTABLE'),
+                   'python_exe':        get_env('RELION_PYTHON_EXECUTABLE'),
                    'qsubscript':        get_env('RELION_QSUB_TEMPLATE')}
 
     for extra in range(1,10):
